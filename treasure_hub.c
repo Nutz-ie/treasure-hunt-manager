@@ -124,6 +124,12 @@ int main() {
     char input[BUFFER_SIZE];
 
     while (1) {
+
+        char cwd[BUFFER_SIZE]; //this check exists purely because I was debugging the list_treasures functionality and SOMEHOW IT REACHES THE DIR ONLY IF I LEAVE IT IN WHAT
+        if (getcwd(cwd, sizeof(cwd))) {
+            //printf("[monitor] CWD: %s\n", cwd);
+        }
+
         printf("treasure_hub> ");
         fflush(stdout);
         if (!fgets(input, sizeof(input), stdin)) break;
@@ -156,7 +162,49 @@ int main() {
                 printf("Usage: view_treasure <hunt_id> <treasure_id>\n");
             }
 
-        } else if (strcmp(input, "stop_monitor") == 0) {
+        }
+        else if (strcmp(input, "calculate_score") == 0) {
+            FILE *fp = popen("find . -mindepth 1 -maxdepth 1 -type d", "r");
+        if (!fp) {
+            perror("popen");
+            continue;
+        }
+
+            char line[BUFFER_SIZE];
+            while (fgets(line, sizeof(line), fp)) {
+                line[strcspn(line, "\n")] = 0;
+
+            int pipefd[2];
+            if (pipe(pipefd) == -1) {
+                perror("pipe");
+                continue;
+            }
+
+            pid_t pid = fork();
+            if (pid == 0) {
+                // child
+                close(pipefd[0]);
+                dup2(pipefd[1], STDOUT_FILENO);
+                execl("./calculate_score", "./calculate_score", line, (char *)NULL);
+                perror("execl");
+                exit(1);
+            } else {
+                // parent
+                close(pipefd[1]);
+                printf("Scores for hunt %s:\n", line);
+                char buf[256];
+                while (read(pipefd[0], buf, sizeof(buf)) > 0) {
+                    write(STDOUT_FILENO, buf, strlen(buf));
+                }
+                close(pipefd[0]);
+                wait(NULL);
+            }
+        }
+
+    pclose(fp);
+    }
+
+        else if (strcmp(input, "stop_monitor") == 0) {
             stop_monitor();
 
         } else if (strcmp(input, "exit") == 0) {
